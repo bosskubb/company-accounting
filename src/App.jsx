@@ -8,7 +8,7 @@ import {
 
 // --- Firebase Setup ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -23,7 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'company-accounting-app';
+const appId = 'company-accounting-app'; // ลบโค้ด __app_id ออกแล้ว ใช้เป็น String ธรรมดา
 
 // --- Constants ---
 const INCOME_CATEGORIES = ['ขายสินค้า', 'บริการ', 'ดอกเบี้ย/ปันผล', 'เงินทุน', 'อื่นๆ'];
@@ -35,7 +35,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   // UI State
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'transactions', 'analytics', 'settings'
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
@@ -74,15 +74,11 @@ export default function App() {
   const [isCompressing, setIsCompressing] = useState(false);
   const [viewingReceipt, setViewingReceipt] = useState(null);
 
-  // 1. Authentication
+  // 1. Authentication (ปรับให้คลีนสำหรับการใช้งานจริงบน Vercel)
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
         console.error("Auth error:", error);
       }
@@ -147,7 +143,7 @@ export default function App() {
       if (d.expense > maxAmount) maxAmount = d.expense;
     });
 
-    return { data, maxAmount: maxAmount > 0 ? maxAmount : 1000 }; // fallback scale
+    return { data, maxAmount: maxAmount > 0 ? maxAmount : 1000 };
   }, [transactions, selectedYear]);
 
   // --- Handlers ---
@@ -188,15 +184,13 @@ export default function App() {
     try {
       const message = `🔔 รายการใหม่: ${transaction.description}\nประเภท: ${transaction.type === 'income' ? 'รายรับ 🟢' : 'รายจ่าย 🔴'}\nหมวดหมู่: ${transaction.category}\nจำนวน: ${Number(transaction.amount).toLocaleString()} บาท\nผู้บันทึก: ${transaction.recorderName}`;
       
-      // Attempt generic POST (works well with Make.com/Zapier webhooks)
-      // Note: Direct LINE Notify API blocks browser CORS, so a middleman webhook is required.
       await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: message, rawData: transaction })
       });
     } catch (err) {
-      console.log("Webhook skipped or failed (CORS/Network error):", err);
+      console.log("Webhook skipped or failed:", err);
     }
   };
 
@@ -219,11 +213,8 @@ export default function App() {
       };
       
       await addDoc(transactionsRef, newTransaction);
-      
-      // Trigger Webhook async
       sendWebhookNotification(newTransaction);
 
-      // Reset
       setFormData({
         type: 'expense',
         category: EXPENSE_CATEGORIES[0],
@@ -231,7 +222,7 @@ export default function App() {
         description: '',
         amount: '',
         receipt: null,
-        recorderName: formData.recorderName // keep name for convenience
+        recorderName: formData.recorderName
       });
       setShowForm(false);
     } catch (error) {
@@ -255,7 +246,7 @@ export default function App() {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    if (adminPinInput === '1234') { // Default PIN
+    if (adminPinInput === '1234') { 
       setIsAdmin(true);
       setAdminPinInput('');
     } else {
@@ -285,7 +276,6 @@ export default function App() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  // --- Formatting ---
   const formatMoney = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
   const expenseRatio = totals.income > 0 ? Math.min((totals.expense / totals.income) * 100, 100) : (totals.expense > 0 ? 100 : 0);
@@ -300,7 +290,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20 md:pb-0 font-sans transition-colors duration-300">
       
-      {/* Top Nav */}
       <nav className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
@@ -309,7 +298,6 @@ export default function App() {
               <span className="font-bold text-lg tracking-wide hidden sm:block">ProAccount</span>
             </div>
             
-            {/* Desktop Menu */}
             <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="hidden md:flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                 {[
@@ -338,10 +326,8 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Top Action Bar (Contextual) */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
           
-          {/* Left Context: Date or Title depending on tab */}
           <div className="flex items-center mb-4 sm:mb-0 w-full sm:w-auto justify-center sm:justify-start">
             {activeTab === 'dashboard' || activeTab === 'transactions' ? (
               <>
@@ -362,7 +348,6 @@ export default function App() {
             )}
           </div>
           
-          {/* Right Actions */}
           <div className="flex space-x-3 w-full sm:w-auto">
             {(activeTab === 'dashboard' || activeTab === 'transactions') && (
               <button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm shadow-indigo-200 dark:shadow-none">
@@ -377,7 +362,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- TAB: DASHBOARD --- */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -407,7 +391,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Recent & Categories Split */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
@@ -435,7 +418,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Category Breakdown (Simple List) */}
               <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">สัดส่วนรายจ่าย (หมวดหมู่)</h3>
                  <div className="space-y-4">
@@ -462,13 +444,11 @@ export default function App() {
           </div>
         )}
 
-        {/* --- TAB: ANALYTICS (YEARLY) --- */}
         {activeTab === 'analytics' && (
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 animate-in fade-in">
             <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-6">สรุปผลประกอบการ ปี {selectedYear + 543}</h3>
             
             <div className="h-80 flex items-end justify-between space-x-2 pt-10 pb-4 border-b border-slate-100 dark:border-slate-800 relative">
-              {/* Chart Grid Lines */}
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 dark:opacity-10 text-xs text-slate-400">
                  <div className="border-b border-slate-300 w-full h-0"></div>
                  <div className="border-b border-slate-300 w-full h-0"></div>
@@ -476,33 +456,21 @@ export default function App() {
                  <div className="border-b border-slate-300 w-full h-0"></div>
               </div>
               
-              {/* Bars */}
               {yearlyData.data.map((m, i) => (
                 <div key={i} className="flex-1 flex flex-col justify-end items-center group relative h-full z-10">
-                  
-                  {/* Tooltip */}
                   <div className="absolute -top-12 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none">
                     รับ: {Number(m.income).toLocaleString()} <br/> จ่าย: {Number(m.expense).toLocaleString()}
                   </div>
-
                   <div className="flex w-full justify-center space-x-0.5 sm:space-x-1 h-full items-end">
-                    <div 
-                      className="w-1/3 sm:w-1/2 bg-emerald-400 dark:bg-emerald-500 rounded-t-sm transition-all duration-700" 
-                      style={{height: `${(m.income / yearlyData.maxAmount) * 100}%`, minHeight: m.income > 0 ? '4px' : '0'}}
-                    ></div>
-                    <div 
-                      className="w-1/3 sm:w-1/2 bg-rose-400 dark:bg-rose-500 rounded-t-sm transition-all duration-700" 
-                      style={{height: `${(m.expense / yearlyData.maxAmount) * 100}%`, minHeight: m.expense > 0 ? '4px' : '0'}}
-                    ></div>
+                    <div className="w-1/3 sm:w-1/2 bg-emerald-400 dark:bg-emerald-500 rounded-t-sm transition-all duration-700" style={{height: `${(m.income / yearlyData.maxAmount) * 100}%`, minHeight: m.income > 0 ? '4px' : '0'}}></div>
+                    <div className="w-1/3 sm:w-1/2 bg-rose-400 dark:bg-rose-500 rounded-t-sm transition-all duration-700" style={{height: `${(m.expense / yearlyData.maxAmount) * 100}%`, minHeight: m.expense > 0 ? '4px' : '0'}}></div>
                   </div>
                 </div>
               ))}
             </div>
-            {/* X-Axis Labels */}
             <div className="flex justify-between mt-2 text-[10px] sm:text-xs text-slate-500">
               {yearlyData.data.map((m, i) => <div key={i} className="flex-1 text-center">{m.month}</div>)}
             </div>
-
             <div className="flex justify-center mt-6 space-x-6 text-sm">
               <div className="flex items-center"><div className="w-3 h-3 bg-emerald-400 rounded-full mr-2"></div> รายรับ</div>
               <div className="flex items-center"><div className="w-3 h-3 bg-rose-400 rounded-full mr-2"></div> รายจ่าย</div>
@@ -510,29 +478,16 @@ export default function App() {
           </div>
         )}
 
-        {/* --- TAB: TRANSACTIONS (LIST & SEARCH) --- */}
         {activeTab === 'transactions' && (
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden animate-in fade-in">
-             
-             {/* Search & Filter Bar */}
              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input 
-                    type="text" 
-                    placeholder="ค้นหาชื่อรายการ หรือ ชื่อผู้บันทึก..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white"
-                  />
+                  <input type="text" placeholder="ค้นหาชื่อรายการ หรือ ชื่อผู้บันทึก..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white" />
                 </div>
                 <div className="relative w-full sm:w-48">
                   <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <select 
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none dark:text-white"
-                  >
+                  <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none dark:text-white">
                     <option value="all">ทุกหมวดหมู่</option>
                     <optgroup label="รายรับ">{INCOME_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
                     <optgroup label="รายจ่าย">{EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
@@ -540,7 +495,6 @@ export default function App() {
                 </div>
              </div>
              
-             {/* Transaction Table */}
              <div className="hidden md:block overflow-x-auto">
                <table className="w-full text-left border-collapse">
                  <thead>
@@ -558,9 +512,7 @@ export default function App() {
                      <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                        <td className="px-6 py-4">
                          <div className="text-sm text-slate-500 dark:text-slate-400">{formatDate(t.date)}</div>
-                         <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${t.type === 'income' ? 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-100/50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>
-                           {t.category}
-                         </div>
+                         <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${t.type === 'income' ? 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-100/50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>{t.category}</div>
                        </td>
                        <td className="px-6 py-4 text-sm font-medium text-slate-800 dark:text-slate-200">{t.description}</td>
                        <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{t.recorderName || '-'}</td>
@@ -569,15 +521,11 @@ export default function App() {
                            <button onClick={() => setViewingReceipt(t.receipt)} className="text-slate-400 hover:text-indigo-500 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700" title="ดูใบเสร็จ"><ImageIcon className="h-4 w-4" /></button>
                          ) : <span className="text-slate-300 dark:text-slate-600 text-xs">-</span>}
                        </td>
-                       <td className={`px-6 py-4 text-sm text-right font-semibold ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                         {t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}
-                       </td>
+                       <td className={`px-6 py-4 text-sm text-right font-semibold ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>{t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}</td>
                        <td className="px-6 py-4 text-center">
                          {isAdmin ? (
                            <button onClick={() => handleDelete(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-4 w-4 mx-auto" /></button>
-                         ) : (
-                           <Lock className="h-4 w-4 mx-auto text-slate-200 dark:text-slate-700" title="เฉพาะ Admin ถึงลบได้" />
-                         )}
+                         ) : <Lock className="h-4 w-4 mx-auto text-slate-200 dark:text-slate-700" title="เฉพาะ Admin ถึงลบได้" />}
                        </td>
                      </tr>
                    ))}
@@ -586,7 +534,6 @@ export default function App() {
                </table>
              </div>
 
-             {/* Mobile View */}
              <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
                 {monthlyTransactions.map(t => (
                   <div key={t.id} className="p-5">
@@ -617,11 +564,8 @@ export default function App() {
           </div>
         )}
 
-        {/* --- TAB: SETTINGS --- */}
         {activeTab === 'settings' && (
           <div className="space-y-6 animate-in fade-in">
-            
-            {/* Admin Controls */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
               <div className="flex items-center mb-4">
                 <Shield className="h-6 w-6 text-indigo-500 mr-2" />
@@ -638,17 +582,12 @@ export default function App() {
                 </div>
               ) : (
                 <form onSubmit={handleAdminLogin} className="flex space-x-3">
-                  <input 
-                    type="password" placeholder="ใส่ PIN (ค่าเริ่มต้น: 1234)" 
-                    value={adminPinInput} onChange={(e)=>setAdminPinInput(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                  />
+                  <input type="password" placeholder="ใส่ PIN (ค่าเริ่มต้น: 1234)" value={adminPinInput} onChange={(e)=>setAdminPinInput(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
                   <button type="submit" className="px-5 py-2 bg-slate-800 dark:bg-indigo-600 text-white rounded-xl font-medium">เข้าสู่ระบบ</button>
                 </form>
               )}
             </div>
 
-            {/* Webhook / LINE Notify Settings */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
               <div className="flex items-center mb-4">
                 <Bell className="h-6 w-6 text-indigo-500 mr-2" />
@@ -658,24 +597,16 @@ export default function App() {
                 ระบบจะยิงข้อมูลไปที่ Webhook URL ที่ระบุเมื่อมีการเพิ่มรายการใหม่ (แนะนำให้ใช้ร่วมกับ Make.com หรือ Zapier เพื่อส่งต่อเข้า LINE กลุ่ม)
               </p>
               <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-                <input 
-                  type="url" placeholder="https://hook.make.com/..." 
-                  value={webhookUrl} onChange={(e)=>setWebhookUrl(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                />
-                <button onClick={saveWebhook} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center">
-                  <Send className="h-4 w-4 mr-2" /> บันทึก
-                </button>
+                <input type="url" placeholder="https://hook.make.com/..." value={webhookUrl} onChange={(e)=>setWebhookUrl(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                <button onClick={saveWebhook} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center"><Send className="h-4 w-4 mr-2" /> บันทึก</button>
               </div>
               {webhookTestStatus && <p className="mt-3 text-sm text-emerald-600">{webhookTestStatus}</p>}
             </div>
-
           </div>
         )}
 
       </main>
 
-      {/* Mobile Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 flex justify-between px-2 py-2 z-20 pb-safe">
         {[
           { id: 'dashboard', icon: PieChart, label: 'แดชบอร์ด' },
@@ -686,7 +617,6 @@ export default function App() {
           </button>
         ))}
         
-        {/* FAB Add Button */}
         <button onClick={() => setShowForm(true)} className="flex flex-col items-center px-4 -mt-6">
           <div className="bg-indigo-600 text-white p-3.5 rounded-2xl shadow-lg border-4 border-slate-50 dark:border-slate-950 active:scale-95 transition-transform"><PlusCircle className="h-6 w-6" /></div>
         </button>
@@ -701,7 +631,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* --- ADD TRANSACTION MODAL --- */}
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden transform animate-in slide-in-from-bottom-10 sm:zoom-in-95 border border-slate-100 dark:border-slate-800 max-h-[90vh] flex flex-col">
@@ -713,19 +642,14 @@ export default function App() {
             <div className="p-6 pt-0 overflow-y-auto flex-1">
               <form onSubmit={handleAddTransaction} className="space-y-5">
                 
-                {/* Type Toggle */}
                 <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
                   <button type="button" onClick={() => handleTypeChange('income')} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg ${formData.type === 'income' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500'}`}>รายรับ</button>
                   <button type="button" onClick={() => handleTypeChange('expense')} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg ${formData.type === 'expense' ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-500'}`}>รายจ่าย</button>
                 </div>
 
-                {/* Category Selection */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">หมวดหมู่</label>
-                  <select 
-                    value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                  >
+                  <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white">
                     {(formData.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
@@ -782,7 +706,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Image Viewer */}
       {viewingReceipt && (
         <div className="fixed inset-0 bg-slate-900/95 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="relative max-w-3xl w-full flex flex-col items-center">
