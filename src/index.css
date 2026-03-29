@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .pb-safe {
