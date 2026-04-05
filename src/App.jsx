@@ -4,15 +4,14 @@ import {
   TrendingUp, TrendingDown, DollarSign, ChevronLeft, ChevronRight, 
   Calendar, Sun, Moon, Camera, Image as ImageIcon, X,
   BarChart3, Search, Filter, Settings, Shield, Bell, Lock, Unlock, Send,
-  ShoppingCart, FileText, Printer, Users, Plus, Minus, CheckCircle
+  ShoppingCart, FileText, Printer, Users, Plus
 } from 'lucide-react';
 
 // --- Firebase Setup ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 
-// ใช้ Config ของคุณที่ให้มา
 const firebaseConfig = {
   apiKey: "AIzaSyDnhf_dIE1T0LlTMklxye6VdBWkI8M4YIo",
   authDomain: "mycompanyaccounting-60b76.firebaseapp.com",
@@ -39,7 +38,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   // UI State
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, analytics, transactions, orders, settings
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
@@ -82,7 +81,7 @@ export default function App() {
 
   // Order Form State
   const [showOrderForm, setShowOrderForm] = useState(false);
-  const [viewingOrder, setViewingOrder] = useState(null); // For Invoice/Print View
+  const [viewingOrder, setViewingOrder] = useState(null);
   const [orderForm, setOrderForm] = useState({
     date: new Date().toISOString().split('T')[0],
     customerName: '',
@@ -95,11 +94,8 @@ export default function App() {
   // 1. Authentication
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
+      try { await signInAnonymously(auth); } 
+      catch (error) { console.error("Auth error:", error); }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -110,7 +106,6 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    // Fetch Transactions
     const unsubscribeTx = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       data.sort((a, b) => new Date(b.date) - new Date(a.date) || b.timestamp - a.timestamp);
@@ -118,14 +113,12 @@ export default function App() {
       setLoading(false);
     });
 
-    // Fetch Orders
     const unsubscribeOrders = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       data.sort((a, b) => b.timestamp - a.timestamp);
       setOrders(data);
     });
 
-    // Fetch Customers
     const unsubscribeCustomers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'customers'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setCustomers(data);
@@ -155,7 +148,6 @@ export default function App() {
     return { income, expense, profit: income - expense };
   }, [transactions, currentMonthString]);
 
-  // Yearly Analytics Data
   const yearlyData = useMemo(() => {
     const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
     const data = months.map(m => ({ month: m, income: 0, expense: 0 }));
@@ -193,30 +185,31 @@ export default function App() {
         ctx.drawImage(img, 0, 0, width, height);
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
         
-        if(targetState === 'transaction') {
-          setFormData(prev => ({ ...prev, receipt: compressedBase64 }));
-        } else if (targetState === 'order') {
-          setOrderForm(prev => ({ ...prev, poImage: compressedBase64 }));
-        }
+        if(targetState === 'transaction') setFormData(prev => ({ ...prev, receipt: compressedBase64 }));
+        else if (targetState === 'order') setOrderForm(prev => ({ ...prev, poImage: compressedBase64 }));
         setIsCompressing(false);
       };
     };
   };
 
-  // --- Accounting Handlers ---
+  const sendWebhookNotification = async (message) => {
+    if (!webhookUrl) return;
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: message })
+      });
+    } catch (err) { console.log(err); }
+  };
+
   const handleAddTransaction = async (e) => {
     e.preventDefault();
     if (!user || !formData.description || !formData.amount || !formData.recorderName) return;
     try {
       const newTx = { ...formData, amount: Number(formData.amount), timestamp: Date.now(), userId: user.uid };
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), newTx);
-      
-      if (webhookUrl) {
-        fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: `🔔 รายการใหม่: ${newTx.description}\nประเภท: ${newTx.type === 'income' ? 'รายรับ' : 'รายจ่าย'}\nจำนวน: ${newTx.amount} บาท` })
-        }).catch(err => console.log(err));
-      }
-
+      sendWebhookNotification(`🔔 รายการใหม่: ${newTx.description}\nประเภท: ${newTx.type === 'income' ? 'รายรับ' : 'รายจ่าย'}\nจำนวน: ${newTx.amount} บาท`);
       setFormData({ ...formData, description: '', amount: '', receipt: null });
       setShowForm(false);
     } catch (error) { console.error(error); }
@@ -229,7 +222,6 @@ export default function App() {
     }
   };
 
-  // --- Order Management Handlers ---
   const handleAddOrderItem = () => {
     setOrderForm(prev => ({ ...prev, items: [...prev.items, { id: Date.now(), name: '', qty: 1, price: 0 }] }));
   };
@@ -251,7 +243,6 @@ export default function App() {
     try {
       const totalAmount = orderForm.items.reduce((sum, item) => sum + (Number(item.qty) * Number(item.price)), 0);
       
-      // Save Customer if not exists
       const existingCustomer = customers.find(c => c.name === orderForm.customerName);
       if(!existingCustomer) {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'customers'), {
@@ -265,20 +256,20 @@ export default function App() {
         items: orderForm.items,
         total: totalAmount,
         poImage: orderForm.poImage,
-        status: 'pending', // pending, completed
+        status: 'pending',
         timestamp: Date.now(),
         orderNumber: `PO${Date.now().toString().slice(-6)}`
       };
 
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'orders'), newOrder);
+      sendWebhookNotification(`📦 ออเดอร์ใหม่ (PO): ${newOrder.orderNumber}\nลูกค้า: ${newOrder.customer.name}\nยอดรวม: ${totalAmount} บาท`);
 
-      // Reset form
       setOrderForm({
         date: new Date().toISOString().split('T')[0], customerName: '', customerAddress: '', customerTaxId: '',
         poImage: null, items: [{ id: Date.now(), name: '', qty: 1, price: 0 }]
       });
       setShowOrderForm(false);
-    } catch (error) { console.error("Error adding order: ", error); }
+    } catch (error) { console.error(error); }
   };
 
   const handleDeleteOrder = async (id) => {
@@ -288,19 +279,40 @@ export default function App() {
     }
   };
 
-  const exportOrdersCSV = () => {
-    if (orders.length === 0) return;
-    const headers = ["วันที่", "เลขที่เอกสาร", "ชื่อลูกค้า", "รายการสินค้า", "ยอดรวม (บาท)", "สถานะ"];
-    const rows = orders.map(o => {
-      const itemNames = o.items.map(i => `${i.name} (x${i.qty})`).join(" + ");
-      return [ o.date, o.orderNumber, `"${o.customer.name}"`, `"${itemNames}"`, o.total, o.status === 'pending' ? 'รอดำเนินการ' : 'เสร็จสิ้น' ];
-    });
-
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `ออเดอร์ทั้งหมด.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (adminPinInput === '1234') { setIsAdmin(true); setAdminPinInput(''); } 
+    else { alert("รหัส PIN ไม่ถูกต้อง"); }
   };
+
+  const saveWebhook = () => {
+    localStorage.setItem('company_webhook', webhookUrl);
+    setWebhookTestStatus('บันทึกการตั้งค่า Webhook สำเร็จ!');
+    setTimeout(() => setWebhookTestStatus(''), 3000);
+  };
+
+  const exportToCSV = (type) => {
+    let data = [], headers = [], filename = '';
+    if (type === 'transactions') {
+      data = monthlyTransactions;
+      if (data.length === 0) return;
+      headers = ["วันที่", "ประเภท", "หมวดหมู่", "รายการ", "ผู้บันทึก", "จำนวนเงิน"];
+      const rows = data.map(t => [t.date, t.type==='income'?'รายรับ':'รายจ่าย', `"${t.category}"`, `"${t.description}"`, `"${t.recorderName}"`, t.amount]);
+      downloadCSV(headers, rows, `บัญชี_${currentMonthString}.csv`);
+    } else {
+      data = orders;
+      if (data.length === 0) return;
+      headers = ["วันที่", "เลขที่เอกสาร", "ชื่อลูกค้า", "รายการสินค้า", "ยอดรวม", "สถานะ"];
+      const rows = data.map(o => [o.date, o.orderNumber, `"${o.customer.name}"`, `"${o.items.map(i => `${i.name}(x${i.qty})`).join(" + ")}"`, o.total, o.status==='pending'?'รอดำเนินการ':'เสร็จสิ้น']);
+      downloadCSV(headers, rows, `ออเดอร์_ทั้งหมด.csv`);
+    }
+  };
+
+  const downloadCSV = (headers, rows, filename) => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", filename);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  }
 
   // --- Formatting ---
   const formatMoney = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
@@ -328,10 +340,10 @@ export default function App() {
             <div className="flex items-center space-x-2 sm:space-x-4 overflow-x-auto hide-scrollbar">
               <div className="hidden md:flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                 {[
-                  { id: 'dashboard', icon: PieChart, label: 'บัญชี' },
+                  { id: 'dashboard', icon: PieChart, label: 'แดชบอร์ด' },
                   { id: 'orders', icon: ShoppingCart, label: 'ออเดอร์ (PO)' },
                   { id: 'analytics', icon: BarChart3, label: 'สถิติ' },
-                  { id: 'transactions', icon: List, label: 'รายการ' },
+                  { id: 'transactions', icon: List, label: 'บัญชี' },
                   { id: 'settings', icon: Settings, label: 'ตั้งค่า' }
                 ].map(tab => (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}>
@@ -347,15 +359,15 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:py-0">
         
-        {/* Context Bar (Hidden in print) */}
+        {/* Context Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 print:hidden">
           <div className="flex items-center mb-4 sm:mb-0 w-full sm:w-auto justify-center sm:justify-start">
             {activeTab === 'dashboard' || activeTab === 'transactions' ? (
-              <><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><ChevronLeft className="h-5 w-5" /></button><h2 className="text-lg font-bold min-w-[140px] text-center"><Calendar className="h-4 w-4 mr-2 inline text-indigo-500" /> {monthName}</h2><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><ChevronRight className="h-5 w-5" /></button></>
+              <><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronLeft className="h-5 w-5" /></button><h2 className="text-lg font-bold min-w-[140px] text-center"><Calendar className="h-4 w-4 mr-2 inline text-indigo-500" /> {monthName}</h2><button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronRight className="h-5 w-5" /></button></>
             ) : activeTab === 'orders' ? (
               <h2 className="text-lg font-bold px-4"><ShoppingCart className="h-5 w-5 inline mr-2 text-indigo-500"/> ระบบจัดการคำสั่งซื้อ (PO)</h2>
             ) : activeTab === 'analytics' ? (
-              <><button onClick={() => setSelectedYear(selectedYear - 1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><ChevronLeft className="h-5 w-5" /></button><h2 className="text-lg font-bold min-w-[140px] text-center">ปี {selectedYear + 543}</h2><button onClick={() => setSelectedYear(selectedYear + 1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><ChevronRight className="h-5 w-5" /></button></>
+              <><button onClick={() => setSelectedYear(selectedYear - 1)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronLeft className="h-5 w-5" /></button><h2 className="text-lg font-bold min-w-[140px] text-center">ปี {selectedYear + 543}</h2><button onClick={() => setSelectedYear(selectedYear + 1)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronRight className="h-5 w-5" /></button></>
             ) : (
               <h2 className="text-lg font-bold px-4"><Settings className="h-5 w-5 inline mr-2 text-indigo-500"/> การตั้งค่าระบบ</h2>
             )}
@@ -363,18 +375,21 @@ export default function App() {
           
           <div className="flex space-x-3 w-full sm:w-auto">
             {(activeTab === 'dashboard' || activeTab === 'transactions') && (
-              <button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium"><PlusCircle className="h-5 w-5 sm:mr-2" /> <span className="hidden sm:inline">เพิ่มบัญชี</span></button>
+              <>
+                <button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium"><PlusCircle className="h-5 w-5 sm:mr-2" /> <span className="hidden sm:inline">เพิ่มบัญชี</span></button>
+                <button onClick={() => exportToCSV('transactions')} className="flex-1 sm:flex-none flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-medium"><Download className="h-5 w-5" /></button>
+              </>
             )}
             {activeTab === 'orders' && (
               <>
                 <button onClick={() => setShowOrderForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium"><FileText className="h-5 w-5 sm:mr-2" /> <span className="hidden sm:inline">สร้างออเดอร์จาก PO</span></button>
-                <button onClick={exportOrdersCSV} className="flex-1 sm:flex-none flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-medium"><Download className="h-5 w-5" /></button>
+                <button onClick={() => exportToCSV('orders')} className="flex-1 sm:flex-none flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-medium"><Download className="h-5 w-5" /></button>
               </>
             )}
           </div>
         </div>
 
-        {/* --- TAB: ORDERS (PO MANAGEMENT) --- */}
+        {/* --- TAB: ORDERS (PO) --- */}
         {activeTab === 'orders' && (
           <div className="space-y-6 animate-in fade-in print:hidden">
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -429,21 +444,21 @@ export default function App() {
           <div className="space-y-6 animate-in fade-in print:hidden">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="text-slate-500 mb-4 font-medium text-sm">รายรับรวม (เดือนนี้)</div>
+                <div className="text-slate-500 dark:text-slate-400 mb-4 font-medium text-sm">รายรับรวม (เดือนนี้)</div>
                 <span className="text-3xl font-bold text-emerald-600">{formatMoney(totals.income)}</span>
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="text-slate-500 mb-4 font-medium text-sm">รายจ่ายรวม (เดือนนี้)</div>
+                <div className="text-slate-500 dark:text-slate-400 mb-4 font-medium text-sm">รายจ่ายรวม (เดือนนี้)</div>
                 <span className="text-3xl font-bold text-rose-600">{formatMoney(totals.expense)}</span>
               </div>
-              <div className={`rounded-3xl p-6 border shadow-sm ${totals.profit >= 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/20'}`}>
-                <div className="text-slate-500 mb-4 font-medium text-sm">กำไรสุทธิ</div>
-                <span className={`text-4xl font-black ${totals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(totals.profit)}</span>
+              <div className={`rounded-3xl p-6 border shadow-sm ${totals.profit >= 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/20 dark:border-rose-800'}`}>
+                <div className="text-slate-500 dark:text-slate-400 mb-4 font-medium text-sm">กำไรสุทธิ</div>
+                <span className={`text-4xl font-black ${totals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.profit)}</span>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+               <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                  <h3 className="font-semibold">รายการล่าสุด (บัญชี)</h3>
                  <button onClick={() => setActiveTab('transactions')} className="text-sm text-indigo-500 font-medium">ดูทั้งหมด</button>
                </div>
@@ -451,7 +466,7 @@ export default function App() {
                  {monthlyTransactions.slice(0, 5).map(t => (
                    <div key={t.id} className="p-5 flex justify-between items-center">
                      <div>
-                       <p className="font-medium text-sm">{t.description}</p>
+                       <p className="font-medium text-sm text-slate-800 dark:text-slate-200">{t.description}</p>
                        <p className="text-xs text-slate-400 mt-1">{t.category} • {formatDate(t.date)}</p>
                      </div>
                      <span className={`font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-200'}`}>
@@ -465,9 +480,64 @@ export default function App() {
           </div>
         )}
 
-        {/* --- TAB: TRANSACTIONS (List view) --- */}
+        {/* --- TAB: ANALYTICS (Yearly) --- */}
+        {activeTab === 'analytics' && (
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 animate-in fade-in">
+            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-6">สรุปผลประกอบการ ปี {selectedYear + 543}</h3>
+            
+            <div className="h-80 flex items-end justify-between space-x-2 pt-10 pb-4 border-b border-slate-100 dark:border-slate-800 relative">
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 dark:opacity-10 text-xs text-slate-400">
+                 <div className="border-b border-slate-300 w-full h-0"></div>
+                 <div className="border-b border-slate-300 w-full h-0"></div>
+                 <div className="border-b border-slate-300 w-full h-0"></div>
+                 <div className="border-b border-slate-300 w-full h-0"></div>
+              </div>
+              
+              {yearlyData.data.map((m, i) => (
+                <div key={i} className="flex-1 flex flex-col justify-end items-center group relative h-full z-10">
+                  <div className="absolute -top-12 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none">
+                    รับ: {Number(m.income).toLocaleString()} <br/> จ่าย: {Number(m.expense).toLocaleString()}
+                  </div>
+                  <div className="flex w-full justify-center space-x-0.5 sm:space-x-1 h-full items-end">
+                    <div className="w-1/3 sm:w-1/2 bg-emerald-400 dark:bg-emerald-500 rounded-t-sm transition-all duration-700" style={{height: `${(m.income / yearlyData.maxAmount) * 100}%`, minHeight: m.income > 0 ? '4px' : '0'}}></div>
+                    <div className="w-1/3 sm:w-1/2 bg-rose-400 dark:bg-rose-500 rounded-t-sm transition-all duration-700" style={{height: `${(m.expense / yearlyData.maxAmount) * 100}%`, minHeight: m.expense > 0 ? '4px' : '0'}}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between mt-2 text-[10px] sm:text-xs text-slate-500">
+              {yearlyData.data.map((m, i) => <div key={i} className="flex-1 text-center">{m.month}</div>)}
+            </div>
+            <div className="flex justify-center mt-6 space-x-6 text-sm">
+              <div className="flex items-center"><div className="w-3 h-3 bg-emerald-400 rounded-full mr-2"></div> รายรับ</div>
+              <div className="flex items-center"><div className="w-3 h-3 bg-rose-400 rounded-full mr-2"></div> รายจ่าย</div>
+            </div>
+          </div>
+        )}
+
+        {/* --- TAB: TRANSACTIONS (List with Filter) --- */}
         {activeTab === 'transactions' && (
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden animate-in fade-in print:hidden">
+             
+             {/* Search & Filter */}
+             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input 
+                    type="text" placeholder="ค้นหาชื่อรายการ หรือ ผู้บันทึก..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white"
+                  />
+                </div>
+                <div className="relative w-full sm:w-48">
+                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none dark:text-white">
+                    <option value="all">ทุกหมวดหมู่</option>
+                    <optgroup label="รายรับ">{INCOME_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+                    <optgroup label="รายจ่าย">{EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
+                  </select>
+                </div>
+             </div>
+
              <div className="hidden md:block overflow-x-auto">
                <table className="w-full text-left border-collapse">
                  <thead>
@@ -482,16 +552,58 @@ export default function App() {
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                    {monthlyTransactions.map(t => (
                      <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                       <td className="px-6 py-4 text-sm text-slate-500">{formatDate(t.date)}</td>
-                       <td className="px-6 py-4 text-sm font-medium">{t.description}</td>
+                       <td className="px-6 py-4 text-sm text-slate-500">
+                         {formatDate(t.date)}
+                         <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${t.type === 'income' ? 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-100/50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>{t.category}</div>
+                       </td>
+                       <td className="px-6 py-4 text-sm font-medium">
+                         {t.description}
+                         <div className="text-[11px] text-slate-400 font-normal mt-1">{t.recorderName}</div>
+                       </td>
                        <td className={`px-6 py-4 text-sm text-right font-semibold ${t.type === 'income' ? 'text-emerald-600' : ''}`}>{t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}</td>
                        <td className="px-6 py-4 text-center">{t.receipt && <button onClick={() => setViewingReceipt(t.receipt)} className="text-indigo-500"><ImageIcon className="h-4 w-4 mx-auto" /></button>}</td>
-                       <td className="px-6 py-4 text-center">{isAdmin && <button onClick={() => handleDeleteTransaction(t.id)} className="text-rose-500"><Trash2 className="h-4 w-4 mx-auto" /></button>}</td>
+                       <td className="px-6 py-4 text-center">{isAdmin ? <button onClick={() => handleDeleteTransaction(t.id)} className="text-rose-500"><Trash2 className="h-4 w-4 mx-auto" /></button> : <Lock className="h-4 w-4 mx-auto text-slate-200 dark:text-slate-700" title="เฉพาะ Admin" />}</td>
                      </tr>
                    ))}
+                   {monthlyTransactions.length === 0 && <tr><td colSpan="5" className="px-6 py-16 text-center text-slate-400">ไม่พบข้อมูล</td></tr>}
                  </tbody>
                </table>
              </div>
+          </div>
+        )}
+
+        {/* --- TAB: SETTINGS --- */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+              <div className="flex items-center mb-4">
+                <Shield className="h-6 w-6 text-indigo-500 mr-2" />
+                <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">ระบบสิทธิ์การใช้งาน (Admin)</h3>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">เมื่อเปิดโหมดแอดมิน คุณจะสามารถ "ลบรายการ" ที่บันทึกผิดพลาดได้</p>
+              
+              {isAdmin ? (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 p-4 rounded-xl flex justify-between items-center">
+                  <div className="flex items-center text-emerald-700 dark:text-emerald-400"><Unlock className="h-5 w-5 mr-2" /> <span className="font-medium">คุณอยู่ในโหมด Admin แล้ว</span></div>
+                  <button onClick={() => setIsAdmin(false)} className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50">ออกจากระบบ Admin</button>
+                </div>
+              ) : (
+                <form onSubmit={handleAdminLogin} className="flex space-x-3">
+                  <input type="password" placeholder="ใส่ PIN (ค่าเริ่มต้น: 1234)" value={adminPinInput} onChange={(e)=>setAdminPinInput(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                  <button type="submit" className="px-5 py-2 bg-slate-800 dark:bg-indigo-600 text-white rounded-xl font-medium">เข้าสู่ระบบ</button>
+                </form>
+              )}
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+              <div className="flex items-center mb-4"><Bell className="h-6 w-6 text-indigo-500 mr-2" /><h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">การแจ้งเตือน (Webhook / LINE Notify)</h3></div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">ระบบจะยิงข้อมูลไปที่ Webhook URL ที่ระบุเมื่อมีการเพิ่มรายการ หรือ ออเดอร์ใหม่</p>
+              <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                <input type="url" placeholder="https://hook.make.com/..." value={webhookUrl} onChange={(e)=>setWebhookUrl(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                <button onClick={saveWebhook} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center"><Send className="h-4 w-4 mr-2" /> บันทึก</button>
+              </div>
+              {webhookTestStatus && <p className="mt-3 text-sm text-emerald-600">{webhookTestStatus}</p>}
+            </div>
           </div>
         )}
 
@@ -525,8 +637,8 @@ export default function App() {
                   <p className="font-bold text-lg text-slate-800">{viewingOrder.customer.name}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold">เลขที่เอกสาร: <span className="text-indigo-600">{viewingOrder.orderNumber}</span></p>
-                  <p>วันที่: {formatDate(viewingOrder.date)}</p>
+                  <p className="font-bold text-slate-800">เลขที่เอกสาร: <span className="text-indigo-600">{viewingOrder.orderNumber}</span></p>
+                  <p className="text-slate-800">วันที่: {formatDate(viewingOrder.date)}</p>
                 </div>
               </div>
 
@@ -539,11 +651,11 @@ export default function App() {
                     <th className="p-3 font-bold text-slate-800 text-center w-32">สถานะ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-200 text-slate-800">
                   {viewingOrder.items.map((item, index) => (
                     <tr key={index}>
                       <td className="p-3 text-center text-slate-500">{index + 1}</td>
-                      <td className="p-3 font-medium text-slate-800">{item.name}</td>
+                      <td className="p-3 font-medium">{item.name}</td>
                       <td className="p-3 text-center font-bold text-lg">{item.qty}</td>
                       <td className="p-3 text-center"><div className="w-6 h-6 rounded border-2 border-slate-300 mx-auto"></div></td>
                     </tr>
@@ -563,26 +675,26 @@ export default function App() {
                   <h1 className="text-3xl font-black text-indigo-700">INVOICE / RECEIPT</h1>
                   <p className="text-slate-500 font-medium">ใบแจ้งหนี้ / ใบเสร็จรับเงิน</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right text-slate-800">
                   <p className="font-bold text-lg">บริษัท โปรแอคเคาน์ จำกัด</p>
                   <p className="text-sm text-slate-500">123 ถ.สุขุมวิท กรุงเทพฯ 10110<br/>เลขประจำตัวผู้เสียภาษี: 0105555555555</p>
                 </div>
               </div>
               
               <div className="flex justify-between mb-8 text-sm">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 w-1/2">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 w-1/2 text-slate-800">
                   <p className="text-xs text-slate-500 mb-1 font-bold">ลูกค้า / Customer:</p>
-                  <p className="font-bold text-lg text-slate-800">{viewingOrder.customer.name}</p>
+                  <p className="font-bold text-lg">{viewingOrder.customer.name}</p>
                   <p className="text-slate-600 mt-1">{viewingOrder.customer.address || '-'}</p>
                   <p className="text-slate-600 mt-1">Tax ID: {viewingOrder.customer.taxId || '-'}</p>
                 </div>
-                <div className="text-right w-1/3 flex flex-col justify-center">
+                <div className="text-right w-1/3 flex flex-col justify-center text-slate-800">
                   <div className="flex justify-between border-b border-slate-200 py-1"><span className="text-slate-500">No.</span><span className="font-bold">{viewingOrder.orderNumber}</span></div>
                   <div className="flex justify-between border-b border-slate-200 py-1"><span className="text-slate-500">Date</span><span className="font-bold">{formatDate(viewingOrder.date)}</span></div>
                 </div>
               </div>
 
-              <table className="w-full text-left mb-8 border border-slate-200">
+              <table className="w-full text-left mb-8 border border-slate-200 text-slate-800">
                 <thead className="bg-slate-800 text-white">
                   <tr>
                     <th className="p-3 font-medium w-16 text-center">No.</th>
@@ -605,7 +717,7 @@ export default function App() {
                 </tbody>
               </table>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end text-slate-800">
                 <div className="w-1/2 md:w-1/3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div className="flex justify-between mb-2"><span className="text-slate-500">ยอดรวม (Sub Total)</span><span>{formatMoney(viewingOrder.total)}</span></div>
                   <div className="flex justify-between mb-2"><span className="text-slate-500">ภาษี (Vat 7%)</span><span>{formatMoney(viewingOrder.total * 0.07)}</span></div>
@@ -614,7 +726,7 @@ export default function App() {
               </div>
 
               {/* Signature Area */}
-              <div className="flex justify-between mt-20 pt-10 px-10">
+              <div className="flex justify-between mt-20 pt-10 px-10 text-slate-800">
                 <div className="text-center w-48">
                   <div className="border-b border-slate-400 mb-2 h-8"></div>
                   <p className="text-sm text-slate-500">ผู้รับเงิน / Collector</p>
@@ -754,12 +866,22 @@ export default function App() {
         </div>
       )}
 
+      {/* Image Viewer */}
+      {viewingReceipt && (
+        <div className="fixed inset-0 bg-slate-900/95 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in print:hidden">
+          <div className="relative max-w-3xl w-full flex flex-col items-center">
+            <button onClick={() => setViewingReceipt(null)} className="absolute -top-12 right-0 bg-white/10 text-white p-2 rounded-full"><X className="h-6 w-6" /></button>
+            <img src={viewingReceipt} alt="Receipt" className="max-w-full max-h-[85vh] object-contain rounded-xl border border-slate-700/50 shadow-2xl" />
+          </div>
+        </div>
+      )}
+
       {/* Mobile Nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 flex justify-between px-2 py-2 z-20 pb-safe print:hidden">
         {[
-          { id: 'dashboard', icon: PieChart, label: 'บัญชี' },
+          { id: 'dashboard', icon: PieChart, label: 'แดชบอร์ด' },
           { id: 'orders', icon: ShoppingCart, label: 'ออเดอร์' },
-          { id: 'analytics', icon: BarChart3, label: 'สถิติ' },
+          { id: 'transactions', icon: List, label: 'บัญชี' },
           { id: 'settings', icon: Settings, label: 'ตั้งค่า' }
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center flex-1 p-2 ${activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400'}`}>
