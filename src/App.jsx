@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PieChart, List, PlusCircle, Download, Trash2, 
-  TrendingUp, TrendingDown, DollarSign, ChevronLeft, ChevronRight, 
-  Calendar, Sun, Moon, Camera, Image as ImageIcon, X,
+  DollarSign, ChevronLeft, ChevronRight, 
+  Calendar, Sun, Moon, Image as ImageIcon, X,
   BarChart3, Search, Filter, Settings, Shield, Bell, Lock, Unlock, Send,
-  ShoppingCart, FileText, Printer, Users, Plus
+  ShoppingCart, FileText, Printer, Users, Plus, Camera
 } from 'lucide-react';
 
 // --- Firebase Setup ---
@@ -210,7 +210,7 @@ export default function App() {
       const newTx = { ...formData, amount: Number(formData.amount), timestamp: Date.now(), userId: user.uid };
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), newTx);
       sendWebhookNotification(`🔔 รายการใหม่: ${newTx.description}\nประเภท: ${newTx.type === 'income' ? 'รายรับ' : 'รายจ่าย'}\nจำนวน: ${newTx.amount} บาท`);
-      setFormData({ ...formData, description: '', amount: '', receipt: null });
+      setFormData({ type: 'expense', category: EXPENSE_CATEGORIES[0], date: new Date().toISOString().split('T')[0], description: '', amount: '', receipt: null, recorderName: '' });
       setShowForm(false);
     } catch (error) { console.error(error); }
   };
@@ -317,7 +317,6 @@ export default function App() {
   // --- Formatting ---
   const formatMoney = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
-  const expenseRatio = totals.income > 0 ? Math.min((totals.expense / totals.income) * 100, 100) : (totals.expense > 0 ? 100 : 0);
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-500">
@@ -341,8 +340,8 @@ export default function App() {
               <div className="hidden md:flex space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                 {[
                   { id: 'dashboard', icon: PieChart, label: 'แดชบอร์ด' },
-                  { id: 'orders', icon: ShoppingCart, label: 'ออเดอร์ (PO)' },
                   { id: 'analytics', icon: BarChart3, label: 'สถิติ' },
+                  { id: 'orders', icon: ShoppingCart, label: 'ออเดอร์ (PO)' },
                   { id: 'transactions', icon: List, label: 'บัญชี' },
                   { id: 'settings', icon: Settings, label: 'ตั้งค่า' }
                 ].map(tab => (
@@ -376,7 +375,7 @@ export default function App() {
           <div className="flex space-x-3 w-full sm:w-auto">
             {(activeTab === 'dashboard' || activeTab === 'transactions') && (
               <>
-                <button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium"><PlusCircle className="h-5 w-5 sm:mr-2" /> <span className="hidden sm:inline">เพิ่มบัญชี</span></button>
+                <button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none flex items-center justify-center bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium"><PlusCircle className="h-5 w-5 sm:mr-2" /> <span className="hidden sm:inline">เพิ่มข้อมูล</span></button>
                 <button onClick={() => exportToCSV('transactions')} className="flex-1 sm:flex-none flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-medium"><Download className="h-5 w-5" /></button>
               </>
             )}
@@ -451,20 +450,20 @@ export default function App() {
                 <div className="text-slate-500 dark:text-slate-400 mb-4 font-medium text-sm">รายจ่ายรวม (เดือนนี้)</div>
                 <span className="text-3xl font-bold text-rose-600">{formatMoney(totals.expense)}</span>
               </div>
-              <div className={`rounded-3xl p-6 border shadow-sm ${totals.profit >= 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/20 dark:border-rose-800'}`}>
+              <div className={`rounded-3xl p-6 border shadow-sm ${totals.profit >= 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/20 dark:border-rose-800/50'}`}>
                 <div className="text-slate-500 dark:text-slate-400 mb-4 font-medium text-sm">กำไรสุทธิ</div>
                 <span className={`text-4xl font-black ${totals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.profit)}</span>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-               <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                 <h3 className="font-semibold">รายการล่าสุด (บัญชี)</h3>
+               <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                 <h3 className="font-semibold text-slate-800 dark:text-slate-100">รายการล่าสุด (บัญชี)</h3>
                  <button onClick={() => setActiveTab('transactions')} className="text-sm text-indigo-500 font-medium">ดูทั้งหมด</button>
                </div>
                <div className="divide-y divide-slate-100 dark:divide-slate-800">
                  {monthlyTransactions.slice(0, 5).map(t => (
-                   <div key={t.id} className="p-5 flex justify-between items-center">
+                   <div key={t.id} className="p-5 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                      <div>
                        <p className="font-medium text-sm text-slate-800 dark:text-slate-200">{t.description}</p>
                        <p className="text-xs text-slate-400 mt-1">{t.category} • {formatDate(t.date)}</p>
@@ -556,13 +555,13 @@ export default function App() {
                          {formatDate(t.date)}
                          <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${t.type === 'income' ? 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-100/50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>{t.category}</div>
                        </td>
-                       <td className="px-6 py-4 text-sm font-medium">
+                       <td className="px-6 py-4 text-sm font-medium text-slate-800 dark:text-slate-200">
                          {t.description}
                          <div className="text-[11px] text-slate-400 font-normal mt-1">{t.recorderName}</div>
                        </td>
-                       <td className={`px-6 py-4 text-sm text-right font-semibold ${t.type === 'income' ? 'text-emerald-600' : ''}`}>{t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}</td>
-                       <td className="px-6 py-4 text-center">{t.receipt && <button onClick={() => setViewingReceipt(t.receipt)} className="text-indigo-500"><ImageIcon className="h-4 w-4 mx-auto" /></button>}</td>
-                       <td className="px-6 py-4 text-center">{isAdmin ? <button onClick={() => handleDeleteTransaction(t.id)} className="text-rose-500"><Trash2 className="h-4 w-4 mx-auto" /></button> : <Lock className="h-4 w-4 mx-auto text-slate-200 dark:text-slate-700" title="เฉพาะ Admin" />}</td>
+                       <td className={`px-6 py-4 text-sm text-right font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-800 dark:text-slate-200'}`}>{t.type === 'income' ? '+' : '-'}{formatMoney(t.amount)}</td>
+                       <td className="px-6 py-4 text-center">{t.receipt && <button onClick={() => setViewingReceipt(t.receipt)} className="text-indigo-500 hover:text-indigo-600"><ImageIcon className="h-4 w-4 mx-auto" /></button>}</td>
+                       <td className="px-6 py-4 text-center">{isAdmin ? <button onClick={() => handleDeleteTransaction(t.id)} className="text-slate-300 hover:text-rose-500"><Trash2 className="h-4 w-4 mx-auto" /></button> : <Lock className="h-4 w-4 mx-auto text-slate-200 dark:text-slate-700" title="เฉพาะ Admin" />}</td>
                      </tr>
                    ))}
                    {monthlyTransactions.length === 0 && <tr><td colSpan="5" className="px-6 py-16 text-center text-slate-400">ไม่พบข้อมูล</td></tr>}
@@ -599,7 +598,7 @@ export default function App() {
               <div className="flex items-center mb-4"><Bell className="h-6 w-6 text-indigo-500 mr-2" /><h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100">การแจ้งเตือน (Webhook / LINE Notify)</h3></div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">ระบบจะยิงข้อมูลไปที่ Webhook URL ที่ระบุเมื่อมีการเพิ่มรายการ หรือ ออเดอร์ใหม่</p>
               <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-                <input type="url" placeholder="https://hook.make.com/..." value={webhookUrl} onChange={(e)=>setWebhookUrl(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                <input type="url" placeholder="[https://hook.make.com/](https://hook.make.com/)..." value={webhookUrl} onChange={(e)=>setWebhookUrl(e.target.value)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
                 <button onClick={saveWebhook} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium flex items-center justify-center"><Send className="h-4 w-4 mr-2" /> บันทึก</button>
               </div>
               {webhookTestStatus && <p className="mt-3 text-sm text-emerald-600">{webhookTestStatus}</p>}
@@ -753,13 +752,13 @@ export default function App() {
       {/* --- ADD ORDER MODAL --- */}
       {showOrderForm && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in print:hidden">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col border border-slate-100 dark:border-slate-800">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
               <div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">สร้างออเดอร์จาก PO</h2>
                 <p className="text-xs text-slate-500 mt-1">บันทึกเพื่อออกใบจัดซื้อ และ ใบเสร็จ/ใบแจ้งหนี้</p>
               </div>
-              <button onClick={() => setShowOrderForm(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowOrderForm(false)} className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600"><X className="w-5 h-5 text-slate-600 dark:text-slate-300" /></button>
             </div>
             
             <div className="p-6 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950">
@@ -767,51 +766,51 @@ export default function App() {
                 
                 {/* Customer Section */}
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <h3 className="font-bold mb-4 flex items-center"><Users className="w-5 h-5 mr-2 text-indigo-500"/> ข้อมูลลูกค้า</h3>
+                  <h3 className="font-bold mb-4 flex items-center text-slate-800 dark:text-slate-100"><Users className="w-5 h-5 mr-2 text-indigo-500"/> ข้อมูลลูกค้า</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อบริษัท / ลูกค้า *</label>
-                      <input type="text" required placeholder="พิมพ์เพื่อค้นหา หรือเพิ่มใหม่..." value={orderForm.customerName} onChange={(e) => setOrderForm({...orderForm, customerName: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" list="customer-list"/>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">ชื่อบริษัท / ลูกค้า *</label>
+                      <input type="text" required placeholder="พิมพ์เพื่อค้นหา หรือเพิ่มใหม่..." value={orderForm.customerName} onChange={(e) => setOrderForm({...orderForm, customerName: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" list="customer-list"/>
                       <datalist id="customer-list">{customers.map(c => <option key={c.id} value={c.name} />)}</datalist>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">เลขประจำตัวผู้เสียภาษี (Tax ID)</label>
-                      <input type="text" placeholder="13 หลัก (ถ้ามี)" value={orderForm.customerTaxId} onChange={(e) => setOrderForm({...orderForm, customerTaxId: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"/>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">เลขประจำตัวผู้เสียภาษี (Tax ID)</label>
+                      <input type="text" placeholder="13 หลัก (ถ้ามี)" value={orderForm.customerTaxId} onChange={(e) => setOrderForm({...orderForm, customerTaxId: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"/>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-slate-500 mb-1">ที่อยู่</label>
-                      <input type="text" placeholder="ที่อยู่สำหรับออกใบแจ้งหนี้" value={orderForm.customerAddress} onChange={(e) => setOrderForm({...orderForm, customerAddress: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"/>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">ที่อยู่</label>
+                      <input type="text" placeholder="ที่อยู่สำหรับออกใบแจ้งหนี้" value={orderForm.customerAddress} onChange={(e) => setOrderForm({...orderForm, customerAddress: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"/>
                     </div>
                   </div>
                 </div>
 
                 {/* Items Section */}
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <h3 className="font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2 text-indigo-500"/> รายการสินค้าที่สั่งซื้อ</h3>
+                  <h3 className="font-bold mb-4 flex items-center text-slate-800 dark:text-slate-100"><ShoppingCart className="w-5 h-5 mr-2 text-indigo-500"/> รายการสินค้าที่สั่งซื้อ</h3>
                   
                   {orderForm.items.map((item, index) => (
                     <div key={item.id} className="flex flex-wrap md:flex-nowrap gap-3 mb-3 items-end border-b border-slate-100 dark:border-slate-800 pb-3">
                       <div className="w-full md:flex-1">
-                        <label className="block text-xs text-slate-500 mb-1">{index === 0 && 'ชื่อสินค้า'}</label>
-                        <input type="text" required placeholder="เช่น สินค้า A..." value={item.name} onChange={(e) => handleOrderItemChange(item.id, 'name', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-lg outline-none"/>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{index === 0 && 'ชื่อสินค้า'}</label>
+                        <input type="text" required placeholder="เช่น สินค้า A..." value={item.name} onChange={(e) => handleOrderItemChange(item.id, 'name', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"/>
                       </div>
                       <div className="w-24">
-                        <label className="block text-xs text-slate-500 mb-1">{index === 0 && 'จำนวน'}</label>
-                        <input type="number" required min="1" value={item.qty} onChange={(e) => handleOrderItemChange(item.id, 'qty', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-lg outline-none text-center"/>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{index === 0 && 'จำนวน'}</label>
+                        <input type="number" required min="1" value={item.qty} onChange={(e) => handleOrderItemChange(item.id, 'qty', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-center dark:text-white"/>
                       </div>
                       <div className="w-32">
-                        <label className="block text-xs text-slate-500 mb-1">{index === 0 && 'ราคา/หน่วย'}</label>
-                        <input type="number" required min="0" value={item.price} onChange={(e) => handleOrderItemChange(item.id, 'price', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-lg outline-none text-right"/>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{index === 0 && 'ราคา/หน่วย'}</label>
+                        <input type="number" required min="0" value={item.price} onChange={(e) => handleOrderItemChange(item.id, 'price', e.target.value)} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-right dark:text-white"/>
                       </div>
                       <button type="button" onClick={() => handleRemoveOrderItem(item.id)} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg mb-0.5"><Trash2 className="w-5 h-5"/></button>
                     </div>
                   ))}
                   
-                  <button type="button" onClick={handleAddOrderItem} className="text-sm text-indigo-600 font-medium flex items-center mt-2 px-2 py-1 hover:bg-indigo-50 rounded-lg"><Plus className="w-4 h-4 mr-1"/> เพิ่มรายการ</button>
+                  <button type="button" onClick={handleAddOrderItem} className="text-sm text-indigo-600 dark:text-indigo-400 font-medium flex items-center mt-2 px-2 py-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg"><Plus className="w-4 h-4 mr-1"/> เพิ่มรายการ</button>
                   
                   <div className="text-right mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-500 mr-4">ยอดรวมทั้งหมด:</span>
-                    <span className="text-2xl font-black text-indigo-600">
+                    <span className="text-slate-500 dark:text-slate-400 mr-4">ยอดรวมทั้งหมด:</span>
+                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
                       {formatMoney(orderForm.items.reduce((sum, i) => sum + (Number(i.qty) * Number(i.price)), 0))}
                     </span>
                   </div>
@@ -821,12 +820,12 @@ export default function App() {
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                   <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">แนบรูปใบ PO อ้างอิง (ตัวเลือก)</label>
                   {orderForm.poImage ? (
-                    <div className="relative inline-block border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="relative inline-block border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                       <img src={orderForm.poImage} alt="PO Preview" className="h-32 w-auto object-cover" />
                       <button type="button" onClick={() => setOrderForm({...orderForm, poImage: null})} className="absolute top-1 right-1 bg-rose-500 text-white p-1 rounded-full"><X className="h-4 w-4" /></button>
                     </div>
                   ) : (
-                    <label className={`flex items-center justify-center px-4 py-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${isCompressing ? 'opacity-50' : ''}`}>
+                    <label className={`flex items-center justify-center px-4 py-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${isCompressing ? 'opacity-50' : ''}`}>
                       <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'order')} className="hidden" disabled={isCompressing}/>
                       <FileText className="h-6 w-6 mr-3 text-slate-400" />
                       <span className="text-sm text-slate-500 font-medium">{isCompressing ? 'กำลังประมวลผล...' : 'คลิกเพื่ออัปโหลดไฟล์ / ถ่ายรูป PO'}</span>
@@ -836,7 +835,7 @@ export default function App() {
                 </div>
 
                 <div className="pt-2">
-                  <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md text-lg">บันทึกออเดอร์ และ ออกใบเสร็จ</button>
+                  <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md text-lg transition-colors">บันทึกออเดอร์ และ ออกใบเสร็จ</button>
                 </div>
               </form>
             </div>
@@ -844,23 +843,52 @@ export default function App() {
         </div>
       )}
 
-      {/* --- ADD TRANSACTION MODAL (ORIGINAL) --- */}
+      {/* --- ADD TRANSACTION MODAL (RESTORED PHASE 1) --- */}
       {showForm && (
-        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in print:hidden">
-           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl p-6">
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in print:hidden">
+           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl p-6 border border-slate-100 dark:border-slate-800">
              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">เพิ่มรายการบัญชี</h2>
-                <button onClick={() => setShowForm(false)} className="bg-slate-100 p-2 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">เพิ่มข้อมูล</h2>
+                <button onClick={() => setShowForm(false)} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><X className="w-5 h-5 text-slate-500 dark:text-slate-400" /></button>
              </div>
              <form onSubmit={handleAddTransaction} className="space-y-4">
-                <div className="flex bg-slate-100 rounded-xl p-1">
-                  <button type="button" onClick={() => setFormData({...formData, type: 'income'})} className={`flex-1 py-2 font-semibold rounded-lg ${formData.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>รายรับ</button>
-                  <button type="button" onClick={() => setFormData({...formData, type: 'expense'})} className={`flex-1 py-2 font-semibold rounded-lg ${formData.type === 'expense' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>รายจ่าย</button>
+                {/* Income / Expense Toggle */}
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                  <button type="button" onClick={() => setFormData({...formData, type: 'income', category: INCOME_CATEGORIES[0]})} className={`flex-1 py-2 font-semibold rounded-lg transition-all ${formData.type === 'income' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>รายรับ</button>
+                  <button type="button" onClick={() => setFormData({...formData, type: 'expense', category: EXPENSE_CATEGORIES[0]})} className={`flex-1 py-2 font-semibold rounded-lg transition-all ${formData.type === 'expense' ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>รายจ่าย</button>
                 </div>
-                <input type="text" required placeholder="รายละเอียด..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl" />
-                <input type="number" required placeholder="จำนวนเงิน" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl" />
-                <input type="text" required placeholder="ผู้บันทึก" value={formData.recorderName} onChange={(e) => setFormData({...formData, recorderName: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl" />
-                <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">บันทึก</button>
+
+                {/* Date & Category */}
+                <div className="flex space-x-3">
+                  <input type="date" required value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="w-[130px] px-3 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" />
+                  <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="flex-1 px-3 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white appearance-none">
+                    {(formData.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                {/* Description, Amount, Recorder */}
+                <input type="text" required placeholder="รายละเอียด..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white placeholder-slate-400" />
+                <input type="number" required placeholder="จำนวนเงิน" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white placeholder-slate-400" />
+                <input type="text" required placeholder="ชื่อผู้บันทึก" value={formData.recorderName} onChange={(e) => setFormData({...formData, recorderName: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white placeholder-slate-400" />
+
+                {/* Receipt Upload */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">แนบหลักฐาน (ถ้ามี)</label>
+                  {formData.receipt ? (
+                    <div className="relative inline-block border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                      <img src={formData.receipt} alt="Receipt Preview" className="h-24 w-auto object-cover" />
+                      <button type="button" onClick={() => setFormData({...formData, receipt: null})} className="absolute top-1 right-1 bg-rose-500 text-white p-1 rounded-full"><X className="h-4 w-4" /></button>
+                    </div>
+                  ) : (
+                    <label className={`flex items-center justify-center px-4 py-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${isCompressing ? 'opacity-50' : ''}`}>
+                      <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'transaction')} className="hidden" disabled={isCompressing}/>
+                      <Camera className="h-5 w-5 mr-2 text-slate-400" />
+                      <span className="text-sm text-slate-500 font-medium">{isCompressing ? 'กำลังประมวลผล...' : 'คลิกเพื่อถ่ายรูป / อัปโหลด'}</span>
+                    </label>
+                  )}
+                </div>
+
+                <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors shadow-sm">บันทึกข้อมูล</button>
              </form>
            </div>
         </div>
@@ -870,21 +898,22 @@ export default function App() {
       {viewingReceipt && (
         <div className="fixed inset-0 bg-slate-900/95 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in print:hidden">
           <div className="relative max-w-3xl w-full flex flex-col items-center">
-            <button onClick={() => setViewingReceipt(null)} className="absolute -top-12 right-0 bg-white/10 text-white p-2 rounded-full"><X className="h-6 w-6" /></button>
+            <button onClick={() => setViewingReceipt(null)} className="absolute -top-12 right-0 bg-white/10 text-white p-2 rounded-full hover:bg-white/20 transition-colors"><X className="h-6 w-6" /></button>
             <img src={viewingReceipt} alt="Receipt" className="max-w-full max-h-[85vh] object-contain rounded-xl border border-slate-700/50 shadow-2xl" />
           </div>
         </div>
       )}
 
       {/* Mobile Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 flex justify-between px-2 py-2 z-20 pb-safe print:hidden">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 flex justify-between px-2 py-2 z-20 pb-safe print:hidden">
         {[
           { id: 'dashboard', icon: PieChart, label: 'แดชบอร์ด' },
+          { id: 'analytics', icon: BarChart3, label: 'สถิติ' },
           { id: 'orders', icon: ShoppingCart, label: 'ออเดอร์' },
           { id: 'transactions', icon: List, label: 'บัญชี' },
           { id: 'settings', icon: Settings, label: 'ตั้งค่า' }
         ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center flex-1 p-2 ${activeTab === tab.id ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center flex-1 p-2 transition-colors ${activeTab === tab.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
             <tab.icon className="h-5 w-5" /><span className="text-[10px] mt-1 font-medium">{tab.label}</span>
           </button>
         ))}
